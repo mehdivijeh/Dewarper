@@ -4,6 +4,8 @@ package ir.mehdivijeh.scanner.wrapper;
 import android.util.Log;
 
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
@@ -16,20 +18,20 @@ import static org.opencv.core.CvType.CV_32FC2;
 public class PaperUnWrapper {
 
     private static final String TAG = "PaperUnWrapper";
-    private static final int COL_COUNT = 30;
-    private static final int ROW_COUNT = 20;
+    private static final int COL_COUNT = 300;
+    private static final int ROW_COUNT = 200;
     private Mat srcImage;
     private Mat desImage;
     private List<double[]> pointPercent;
-    private List<double[]> points;
-    private double[] pointA; // top left
-    private double[] pointB; // top center
-    private double[] pointC; // top right
-    private double[] pointD; // bottom right
-    private double[] pointE; // bottom center
-    private double[] pointF; // bottom left
-    private double[] centerTop;
-    private double[] centerBottom;
+    private List<int[]> points;
+    private int[] pointA; // top left
+    private int[] pointB; // top center
+    private int[] pointC; // top right
+    private int[] pointD; // bottom right
+    private int[] pointE; // bottom center
+    private int[] pointF; // bottom left
+    private int[] centerTop;
+    private int[] centerBottom;
     private Line centerLine;
 
     public PaperUnWrapper(Mat srcImage, List<double[]> pointPercent) {
@@ -45,7 +47,7 @@ public class PaperUnWrapper {
 
 
     public Mat unwrap(boolean interpolate) {
-        List<List<double[]>> sourceMap = calculateSourceMap();
+        List<List<float[]>> sourceMap = calculateSourceMap();
 
         if (interpolate) {
             //TODO : NOT COMPLETE
@@ -56,18 +58,19 @@ public class PaperUnWrapper {
         return this.desImage;
     }
 
-    private List<double[]> loadPoints() {
-        List<double[]> points = new ArrayList<>();
+    private List<int[]> loadPoints() {
+        List<int[]> points = new ArrayList<>();
         for (double[] point : pointPercent) {
-            double x = point[0] * srcImage.width();
-            double y = point[1] * srcImage.height();
-            double[] pointN = new double[]{x, y};
+            int x = (int) (point[0] * srcImage.width());
+            int y = (int) (point[1] * srcImage.height());
+            int[] pointN = new int[]{x, y};
+            Log.d(TAG, "loadPoints: " + x + " " + y);
             points.add(pointN);
         }
         return points;
     }
 
-    private void mapPointsToMember(List<double[]> points) {
+    private void mapPointsToMember(List<int[]> points) {
         pointA = points.get(0);
         pointB = points.get(1);
         pointC = points.get(2);
@@ -77,33 +80,36 @@ public class PaperUnWrapper {
     }
 
     private void calculateCenters() {
-        double centerTopX = (pointA[0] + pointC[0]) / 2;
-        double centerTopY = (pointA[1] + pointC[1]) / 2;
-        centerTop = new double[]{centerTopX, centerTopY};
+        int centerTopX = (pointA[0] + pointC[0]) / 2;
+        int centerTopY = (pointA[1] + pointC[1]) / 2;
+        centerTop = new int[]{centerTopX, centerTopY};
 
-        double centerBottomX = (pointD[0] + pointF[0]) / 2;
-        double centerBottomY = (pointD[1] + pointF[1]) / 2;
-        centerBottom = new double[]{centerBottomX, centerBottomY};
+        int centerBottomX = (pointD[0] + pointF[0]) / 2;
+        int centerBottomY = (pointD[1] + pointF[1]) / 2;
+        centerBottom = new int[]{centerBottomX, centerBottomY};
+
+        //centerTop = pointB;
+        // centerBottom = pointE;
     }
 
-    private List<List<double[]>> calculateSourceMap() {
-        List<double[]> topPoints = calculateEllipsePoint(pointA, pointB, pointC, COL_COUNT);
-        List<double[]> bottomPoints = calculateEllipsePoint(pointF, pointE, pointD, COL_COUNT);
+    private List<List<float[]>> calculateSourceMap() {
+        List<float[]> topPoints = calculateEllipsePoint(pointA, pointB, pointC, COL_COUNT);
+        List<float[]> bottomPoints = calculateEllipsePoint(pointF, pointE, pointD, COL_COUNT);
 
-        List<List<double[]>> rows = new ArrayList<>();
+        List<List<float[]>> rows = new ArrayList<>();
         for (int rowIndex = 0; rowIndex < ROW_COUNT; rowIndex++) {
-            List<double[]> row = new ArrayList<>();
+            List<float[]> row = new ArrayList<>();
             for (int colIndex = 0; colIndex < COL_COUNT; colIndex++) {
-                double[] top_point = topPoints.get(colIndex);
-                double[] bottom_point = bottomPoints.get(colIndex);
+                float[] top_point = topPoints.get(colIndex);
+                float[] bottom_point = bottomPoints.get(colIndex);
 
-                double deltaX = (top_point[0] - bottom_point[0]) / ((float) (ROW_COUNT - 1));
-                double deltaY = (top_point[1] - bottom_point[1]) / ((float) (ROW_COUNT - 1));
-                double[] delta = new double[]{deltaX, deltaY};
+                float deltaX = (top_point[0] - bottom_point[0]) / ((float) (ROW_COUNT - 1));
+                float deltaY = (top_point[1] - bottom_point[1]) / ((float) (ROW_COUNT - 1));
+                float[] delta = new float[]{deltaX, deltaY};
 
-                double pointX = top_point[0] - delta[0] * rowIndex;
-                double pointY = top_point[1] - delta[1] * rowIndex;
-                double[] point = new double[]{pointX, pointY};
+                float pointX = top_point[0] - delta[0] * rowIndex;
+                float pointY = top_point[1] - delta[1] * rowIndex;
+                float[] point = new float[]{pointX, pointY};
 
                 row.add(point);
             }
@@ -113,59 +119,87 @@ public class PaperUnWrapper {
     }
 
 
-    private List<double[]> calculateEllipsePoint(double[] left, double[] top, double[] right, int pointsCount) {
-        double centerX = ((double) left[0] + right[0]) / 2;
-        double centerY = ((double) left[1] + right[1]) / 2;
-        double[] center = new double[]{centerX, centerY};
+    private List<float[]> calculateEllipsePoint(int[] left, int[] top, int[] right, int pointsCount) {
+        float centerX = (left[0] + right[0]) / 2f;
+        float centerY = (left[1] + right[1]) / 2f;
+        float[] center = new float[]{centerX, centerY};
 
-        double[] aVector = new double[]{left[0] - right[0], left[1] - right[1]};
-        double aNorm = norm(aVector) / 2;
+        float[] aVector = new float[]{left[0] - right[0], left[1] - right[1]};
+        float aNorm = norm(aVector) / 2;
 
-        double[] bVector = new double[]{center[0] - top[0], center[1] - top[1]};
-        double bNorm = norm(bVector);
+        float[] bVector = new float[]{center[0] - top[0], center[1] - top[1]};
+        float bNorm = norm(bVector);
 
-        double delta;
+
+        float delta;
         if (top[1] - center[1] > 0) {
-            delta = Math.PI / (pointsCount - 1);
+            delta = (float) Math.PI / (pointsCount - 1);
         } else {
-            delta = -Math.PI / (pointsCount - 1);
+            delta = (float) -Math.PI / (pointsCount - 1);
         }
 
-        double cosRot = (right[0] - center[0]) / aNorm;
-        double sinRot = (right[1] - center[1]) / aNorm;
+        float cosRotRight = (right[0] - center[0]) / aNorm;
+        float sinRotRight = (right[1] - center[1]) / aNorm;
 
-        List<double[]> points = new ArrayList<>();
+      /*  double cosRotLeft = (center[0] - left[0]) / aNorm;
+        double sinRotLeft = (center[1] - left[1]) / aNorm;
+
+        if (cosRotRight > 1) {
+            cosRotRight = 1;
+        }
+
+        if (sinRotRight > 1) {
+            sinRotRight = 1;
+        }
+
+        if (cosRotLeft > 1) {
+            cosRotLeft = 1;
+        }
+
+        if (sinRotLeft > 1) {
+            sinRotLeft = 1;
+        }*/
+
+        List<float[]> points = new ArrayList<>();
         for (int i = 0; i < pointsCount; i++) {
-            double phi = delta * i;
-            double[] dx_dy = getEllipsePoint(aNorm, bNorm, phi);
-            double dx = dx_dy[0];
-            double dy = dx_dy[1];
+            float phi = delta * i;
+            float[] dx_dy = getEllipsePoint(aNorm, bNorm, phi);
+            float dx = dx_dy[0];
+            float dy = dx_dy[1];
 
-            double x = Math.round(center[0] + dx * cosRot - dy * sinRot);
-            double y = Math.round(center[1] + dx * sinRot + dy * cosRot);
+            float x = 0;
+            float y = 0;
+           // if (isTop) {
+                x = Math.round(center[0] + dx * cosRotRight - dy * sinRotRight);
+                y = Math.round(center[1] + dx * sinRotRight + dy * cosRotRight);
+           /* } else {
+                x = Math.round(center[0] + dx * cosRotLeft - dy * sinRotLeft);
+                y = Math.round(center[1] + dx * sinRotLeft + dy * cosRotLeft);
+            }*/
 
-            points.add(new double[]{x, y});
+
+            points.add(new float[]{x, y});
         }
 
         Collections.reverse(points);
         return points;
     }
 
-    private double norm(double[] vector) {
-        return Math.sqrt(vector[0] * vector[0] + vector[1] + vector[1]);
+    private float norm(float[] vector) {
+        return (float) Math.sqrt(vector[0] * vector[0] + vector[1] * vector[1]);
     }
 
     /*
      * Get ellipse radius in polar coordinates
      * */
-    private double[] getEllipsePoint(double a, double b, double phi) {
-        return new double[]{a * Math.cos(phi), b * Math.sin(phi)};
+    private float[] getEllipsePoint(float a, float b, float phi) {
+        return new float[]{a * (float) Math.cos(phi), (b * (float) Math.sin(phi))};
     }
 
     /*
      * Unwrap label using transform
      * */
-    private void unwrapPaperPerspective(List<List<double[]>> sourceMap) {
+    private void unwrapPaperPerspective(List<List<float[]>> sourceMap) {
         int width = srcImage.width();
         int height = srcImage.height();
 
@@ -240,7 +274,32 @@ public class PaperUnWrapper {
         return rows;
     }
 
+    public void draw_mesh() {
+        List<List<float[]>> calculateSourceMap = calculateSourceMap();
+        for (int i = 0; i < calculateSourceMap.size(); i++) {
+            for (int j = 0; j < calculateSourceMap.get(i).size(); j++) {
+                int pointX = (int) calculateSourceMap.get(i).get(j)[0];
+                int pointY = (int) calculateSourceMap.get(i).get(j)[1];
+
+                Point pt1 = new Point(pointX, pointY);
+                Point pt2 = new Point(pointX, pointY);
+
+                Imgproc.line(srcImage, pt1, pt2, new Scalar(255, 0, 0), 3);
+            }
+        }
+
+    }
+
+
     public List<double[]> getPoints() {
-        return points;
+        List<double[]> pointDouble = new ArrayList<>();
+        for (int[] p : points) {
+            double[] d = new double[p.length];
+            for (int i = 0; i < p.length; i++) {
+                d[i] = p[i];
+            }
+            pointDouble.add(d);
+        }
+        return pointDouble;
     }
 }

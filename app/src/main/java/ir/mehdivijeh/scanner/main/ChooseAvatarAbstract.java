@@ -35,6 +35,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.Objects;
 
+import id.zelory.compressor.Compressor;
 import ir.mehdivijeh.scanner.R;
 
 import static com.theartofdev.edmodo.cropper.CropImageView.ScaleType.CENTER_CROP;
@@ -194,6 +195,18 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
                 case CropImage.CROP_IMAGE_ACTIVITY_REQUEST_CODE:
                     CropImage.ActivityResult result = CropImage.getActivityResult(data);
                     assert result != null;
+                   /* if (result.getUri().getPath() != null) {
+                        File file = new File(result.getUri().getPath());
+                        try {
+                            File compressFile = new Compressor(this).compressToFile(file);
+                            Drawable d = Drawable.createFromPath(compressFile.getAbsolutePath());
+                            onImageProvided(d, compressFile.getAbsolutePath());
+                        } catch (IOException e) {
+                            onImageProvided(retrieveDrawableFromUri(result.getUri()), result.getUri().getPath());
+                            e.printStackTrace();
+                        }
+                    }*/
+
                     onImageProvided(retrieveDrawableFromUri(result.getUri()), result.getUri().getPath());
                     break;
             }

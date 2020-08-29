@@ -6,12 +6,10 @@ package ir.mehdivijeh.scanner.wrapper;
  *  If the line is vertical, set "vertical" attr to True and save "x" position of the line
  */
 
-import org.opencv.core.Mat;
-
 public class Line {
 
-    private double[] point1;
-    private double[] point2;
+    private int[] point1;
+    private int[] point2;
     private double k;
     private double b;
     private double fixed_x;
@@ -20,7 +18,7 @@ public class Line {
     private double angel_sis;
     private boolean IsVertical = false;
 
-    public Line(double[] point1, double[] point2) {
+    public Line(int[] point1, int[] point2) {
         this.point1 = point1;
         this.point2 = point2;
 
@@ -30,9 +28,9 @@ public class Line {
     private void setLineProps() {
         double k_normal;
         if (point1[0] - point2[0] != 0) {
-            k = ( point2[1] - point1[1]) / (point2[0] - point1[0]);
+            k = (point2[1] - point1[1]) / (point2[0] - point1[0]);
             b = point2[1] - k * point2[0];
-             k_normal = -1 / k;
+            k_normal = -1 / k;
         }else {
             IsVertical = true;
             fixed_x = point2[0];

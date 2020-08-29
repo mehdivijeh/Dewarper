@@ -43,8 +43,15 @@ public class ImageWrapper {
                 pointDouble[i] = point[i];
             }*/
 
-            Imgproc.line(srcImage, new Point(point), new Point(point), new Scalar(0, 255, 255), 3);
+            Imgproc.line(srcImage, new Point(point), new Point(point), new Scalar(0, 255, 255), 10);
         }
+
+
+        // sharpness image
+        Imgproc.cvtColor(destination, destination, Imgproc.COLOR_RGB2GRAY);//rgbMat to gray grayMat
+        //Photo.fastNlMeansDenoising(destination, destination,11,31,9);
+
+        paperUnWrapper.draw_mesh();
 
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
