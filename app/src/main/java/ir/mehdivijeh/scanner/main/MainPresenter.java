@@ -8,6 +8,7 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.util.HashSet;
 
+import ir.mehdivijeh.scanner.general.RetrofitProvider;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 import rx.Subscription;
@@ -26,7 +27,7 @@ class MainPresenter implements MainContract.MainPresenter {
 
     @Override
     public void uploadImage(RequestBody requestBody, MultipartBody.Part image) {
-       /* subscriptions.add(
+        subscriptions.add(
                 RetrofitProvider.guestUsing(UploadImage.class)
                         .upload(requestBody, image)
                         .subscribeOn(Schedulers.io())
@@ -42,7 +43,7 @@ class MainPresenter implements MainContract.MainPresenter {
 
                         }, throwable -> {
                             Toast.makeText(((Context) (view)), throwable.getMessage(), Toast.LENGTH_LONG).show();
-                        }));*/
+                        }));
     }
 
     @Override
