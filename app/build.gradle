@@ -33,6 +33,12 @@ repositories {
     }
 }
 
+android {
+    configurations {
+        all*.exclude group: 'com.squareup.okhttp3', module: 'okhttp'
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
 
@@ -59,12 +65,11 @@ dependencies {
     //material
     implementation 'com.google.android.material:material:1.1.0'
 
-  /*  //retrofit
+    //retrofit
     implementation 'com.squareup.okhttp3:okhttp:3.12.3'
     implementation 'com.squareup.retrofit2:converter-gson:2.6.0'
     implementation 'com.squareup.retrofit2:adapter-rxjava:2.6.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:3.12.3'
-*/
     //GSon
     implementation 'com.google.code.gson:gson:2.8.6'
 

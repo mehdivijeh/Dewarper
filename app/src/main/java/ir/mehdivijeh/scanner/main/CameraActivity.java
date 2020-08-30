@@ -1,8 +1,5 @@
 package ir.mehdivijeh.scanner.main;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -10,6 +7,9 @@ import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.ProgressBar;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.dynamsoft.camerasdk.exception.DcsCameraNotAuthorizedException;
 import com.dynamsoft.camerasdk.exception.DcsException;
@@ -26,15 +26,11 @@ import java.io.IOException;
 
 import ir.mehdivijeh.scanner.R;
 
-public class CameraActivity extends AppCompatActivity {
+import static ir.mehdivijeh.scanner.general.GeneralConstants.TEMP_IMAGE_DIRECTORY_FILE_PATH;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.TEMP_IMAGE_DIRECTORY_NAME;
 
-    private static final String BASE_DIRECTORY_NAME = "Camera Document Capture";
-    private static final String TEMP_IMAGE_DIRECTORY_NAME = "Temporary Images";
-    private static final String PERM_IMAGE_DIRECTORY_NAME = "Processed Images";
-    public static final String BASE_DIRECTORY_FILE_PATH = Environment
-            .getExternalStorageDirectory().getAbsolutePath() + File.separator + BASE_DIRECTORY_NAME;
-    public static final String TEMP_IMAGE_DIRECTORY_FILE_PATH = BASE_DIRECTORY_FILE_PATH +
-            File.separator + TEMP_IMAGE_DIRECTORY_NAME;
+
+public class CameraActivity extends AppCompatActivity {
 
     // Debugging
     private static final String TAG = "CaptureActivity";
@@ -86,7 +82,7 @@ public class CameraActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // Start Preview
-        if(mDcsView.getCurrentView() == DcsView.DVE_VIDEOVIEW){
+        if (mDcsView.getCurrentView() == DcsView.DVE_VIDEOVIEW) {
             try {
                 mDcsView.getVideoView().preview();
             } catch (DcsCameraNotAuthorizedException e) {
@@ -121,8 +117,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private boolean initCameraSDK() {
         try {
-            DcsView.setLicense(this, mPreferenceManager.getString("camera_license",
-                    getString(R.string.dynamsoft_camera_license)));
+            DcsView.setLicense(this, mPreferenceManager.getString("camera_license", getString(R.string.dynamsoft_camera_license)));
             return true;
         } catch (DcsValueNotValidException e) {
             Log.e(TAG, "InvalidDynamsoftLicenseException: " + e.getMessage());
@@ -147,7 +142,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private void setTorchMode() {
         // Get String
-        int torchMode = Integer.parseInt(mPreferenceManager.getString("torch_mode", "0"));
+        int torchMode = Integer.parseInt(mPreferenceManager.getString("torch_mode", "1"));
         // Always On
         if (torchMode == 0) {
             mDcsView.getVideoView().setFlashMode(DcsVideoView.DFME_TORCH);
@@ -226,7 +221,7 @@ public class CameraActivity extends AppCompatActivity {
 
     private void initViewChangeListener() {
         mDcsView.setListener((dcsView, i, i1) -> {
-            if (i1 == DcsView.DVE_EDITORVIEW){
+            if (i1 == DcsView.DVE_EDITORVIEW) {
                 // Set View to prevent Gallery Showing
                 mDcsView.getDocumentEditorView().setNextViewAfterCancel(DcsView.DVE_EDITORVIEW);
                 mDcsView.getDocumentEditorView().setNextViewAfterOK(DcsView.DVE_EDITORVIEW);
@@ -259,13 +254,14 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     private String createTempImageFile() throws IOException {
+        String destPath = getExternalFilesDir(null).getAbsolutePath();
         // Create Temporary File Name
         String temporaryImageFileName;
         temporaryImageFileName = getString(R.string.temporary_image_file_name,
                 String.valueOf(System.currentTimeMillis()));
         // Create New Temporary File
         File tempImageFile = File.createTempFile(temporaryImageFileName, ".jpg",
-                new File(   TEMP_IMAGE_DIRECTORY_FILE_PATH));
+                new File(destPath + File.separator + TEMP_IMAGE_DIRECTORY_NAME));
         // Set mTempImagePath
         mTempImagePath = tempImageFile.getAbsolutePath();
         // Return Temporary File Path

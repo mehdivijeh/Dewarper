@@ -5,7 +5,7 @@
     <string name="open_camera">دوربین</string>
     <string name="choose_from_gallery">گالری</string>
     <string name="delete_picture">حذف عکس</string>
-    <string name="dynamsoft_camera_license">4D00DE42B16583BAC2DB04BCC3F7459DE0B31C60</string>
+    <string name="dynamsoft_camera_license">0EFE1827942B7FE1FB04C07924C9D9A9E41F125E</string>
     <string name="temporary_image_file_name">TEMP_%1$s</string>
 
 </resources>

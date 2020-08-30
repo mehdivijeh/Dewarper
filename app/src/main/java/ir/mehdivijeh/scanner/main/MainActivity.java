@@ -1,16 +1,25 @@
 package ir.mehdivijeh.scanner.main;
 
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -24,10 +33,22 @@ import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
 
+import static ir.mehdivijeh.scanner.general.GeneralConstants.BASE_DIRECTORY_FILE_PATH;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.BASE_DIRECTORY_NAME;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.PERM_IMAGE_DIRECTORY_FILE_PATH;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.PERM_IMAGE_DIRECTORY_NAME;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.TEMP_IMAGE_DIRECTORY_FILE_PATH;
+import static ir.mehdivijeh.scanner.general.GeneralConstants.TEMP_IMAGE_DIRECTORY_NAME;
+
+
 public class MainActivity extends ChooseAvatarAbstract implements MainContract.MainView {
 
 
-    public static final int CAPTURE_IMAGE = 100;
+    // Variables
+    private String mTempImagePath = null;
+    private FrameLayout mBaseLayout = null;
+
+    public static final int CAPTURE_IMAGE = 120;
 
     private static final String TAG = "MainActivity";
     private static final int REQUEST_CODE = 20;
@@ -38,12 +59,22 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
     private ProgressDialog progressDialogLoad;
 
 
+    // Constants
+    private static final int PERMISSION_ALL = 100;
+    private static final String[] PERMISSIONS = {
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            android.Manifest.permission.CAMERA
+    };
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        captureNewImage();
+        getPermission();
+
+
 
 
         btnSelectImage = findViewById(R.id.btn_open_image);
@@ -55,12 +86,67 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
     }
 
+    private void getPermission() {
+        if(!hasPermissions(this, PERMISSIONS)){
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                requestPermissions( PERMISSIONS, PERMISSION_ALL);
+            }
+        }else {
+            initDirectories();
+            captureNewImage();
+        }
+    }
+
+    public static boolean hasPermissions(Context context, String... permissions) {
+        if (context != null && permissions != null) {
+            for (String permission : permissions) {
+                if (ActivityCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void initDirectories() {
+        String destPath = getExternalFilesDir(null).getAbsolutePath();
+
+        File baseDirectory = new File(destPath + File.separator + BASE_DIRECTORY_NAME);
+        if (!baseDirectory.exists()) {
+            Log.i(TAG, "Base Directory Created: " + baseDirectory.mkdirs());
+        }
+
+        File tempImageDirectory = new File(destPath + File.separator + TEMP_IMAGE_DIRECTORY_NAME);
+        if (!tempImageDirectory.exists()) {
+            Log.i(TAG, "Temp Image Directory Created: " + tempImageDirectory.mkdirs());
+        }
+
+        File permImageDirectory = new File(destPath + File.separator + PERM_IMAGE_DIRECTORY_NAME);
+        if (!permImageDirectory.exists()) {
+            Log.i(TAG, "Perm Image Directory Created: " + permImageDirectory.mkdirs());
+        }
+    }
+
     private void captureNewImage() {
         // Create Camera Intent
         Intent captureNewImage = new Intent(this, CameraActivity.class);
         startActivityForResult(captureNewImage, CAPTURE_IMAGE);
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[],
+                                           @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case PERMISSION_ALL: {
+                if (grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                    getPermission();
+                } else {
+                    initDirectories();
+                    captureNewImage();
+                }
+            }
+        }
+    }
 
     @Override
     public void onImageProvided(Drawable drawable, String path) {
@@ -84,7 +170,7 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         //startActivityForResult(SelectPointActivity.SelectPointActivityIntent(this, path), REQUEST_CODE);
     }
 
-    @Override
+  /*  @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
@@ -95,7 +181,7 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
             double height = data.getIntExtra(SelectPointActivity.IMAGE_HEIGHT, 0);
 
 
-              /*
+              *//*
         |        |                  |        |
         |    B   |                  A        C
         | /    \ |                  | \    / |
@@ -107,7 +193,7 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         | \    / |                  | \    / |
         |   E    |                  |   E    |
         |        |                  |        |
-        * */
+        * *//*
 
             Bitmap image = BitmapFactory.decodeFile(imagePath);
 
@@ -131,6 +217,47 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
 
             createImageWrapper(pointsPercent);
+        }
+    }*/
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode) {
+            case CAPTURE_IMAGE:
+                if (resultCode == RESULT_OK) {
+                    if (data.getExtras() != null && data.getStringExtra("image-path") != null) {
+                        // Get Temp Image Path
+                        mTempImagePath = data.getStringExtra("image-path");
+                        Bitmap bitmap = BitmapFactory.decodeFile(mTempImagePath);
+                        imageView.setImageBitmap(bitmap);
+                        imageView.setVisibility(View.VISIBLE);
+
+
+                        File file = new File(mTempImagePath);
+
+                        RequestBody requestFile =
+                                RequestBody.create(MediaType.parse("multipart/form-data"), file);
+
+
+                        MultipartBody.Part body =
+                                MultipartBody.Part.createFormData("image", file.getName(), requestFile);
+
+                        RequestBody fullName =
+                                RequestBody.create(MediaType.parse("multipart/form-data"), "image");
+
+
+                        presenter.uploadImage(fullName, body);
+                        showDialogLoading();
+
+                    } else {
+
+                    }
+                } else if (resultCode == RESULT_CANCELED) {
+                    Toast.makeText(this, "Image Capture Cancelled", Toast.LENGTH_LONG)
+                            .show();
+                }
+                break;
         }
     }
 
