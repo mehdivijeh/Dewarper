@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Objects;
 
 import ir.mehdivijeh.scanner.R;
+import ir.mehdivijeh.scanner.nwrapper.PythonConvertedDewarper;
+import ir.mehdivijeh.scanner.re.Dewarper;
 import ir.mehdivijeh.scanner.wrapper.ImageWrapper;
 import ir.mehdivijeh.scanner.wrapper.ImageWrapperBuilder;
 import okhttp3.MediaType;
@@ -74,9 +76,6 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
         getPermission();
 
-
-
-
         btnSelectImage = findViewById(R.id.btn_open_image);
         imageView = findViewById(R.id.img);
         presenter = new MainPresenter(this);
@@ -92,8 +91,8 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
                 requestPermissions( PERMISSIONS, PERMISSION_ALL);
             }
         }else {
-            initDirectories();
-            captureNewImage();
+            //initDirectories();
+            //captureNewImage();
         }
     }
 
@@ -154,7 +153,11 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
         File file = new File(path);
 
-        RequestBody requestFile =
+        //new PythonConvertedDewarper(path);
+        Dewarper dewarper = new Dewarper(path);
+        dewarper.dewarping();
+
+        /*RequestBody requestFile =
                 RequestBody.create(MediaType.parse("multipart/form-data"), file);
 
 
@@ -166,7 +169,7 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
 
         presenter.uploadImage(fullName, body);
-        showDialogLoading();
+        showDialogLoading();*/
         //startActivityForResult(SelectPointActivity.SelectPointActivityIntent(this, path), REQUEST_CODE);
     }
 
