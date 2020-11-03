@@ -1,5 +1,6 @@
 package ir.mehdivijeh.scanner.main;
 
+import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -65,6 +66,7 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
     private static final int PERMISSION_ALL = 100;
     private static final String[] PERMISSIONS = {
             android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
             android.Manifest.permission.CAMERA
     };
 
@@ -73,6 +75,13 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test.jpg");
+        if (file.exists()) {
+            Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test.jpg", this);
+            dewarper.dewarping();
+        }
 
         getPermission();
 
@@ -86,11 +95,11 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
     }
 
     private void getPermission() {
-        if(!hasPermissions(this, PERMISSIONS)){
+        if (!hasPermissions(this, PERMISSIONS)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                requestPermissions( PERMISSIONS, PERMISSION_ALL);
+                requestPermissions(PERMISSIONS, PERMISSION_ALL);
             }
-        }else {
+        } else {
             //initDirectories();
             //captureNewImage();
         }
@@ -154,8 +163,8 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         File file = new File(path);
 
         //new PythonConvertedDewarper(path);
-        Dewarper dewarper = new Dewarper(path);
-        dewarper.dewarping();
+        //Dewarper dewarper = new Dewarper(path, this);
+        //dewarper.dewarping();
 
         /*RequestBody requestFile =
                 RequestBody.create(MediaType.parse("multipart/form-data"), file);

@@ -39,6 +39,7 @@ import id.zelory.compressor.Compressor;
 import ir.mehdivijeh.scanner.R;
 
 import static com.theartofdev.edmodo.cropper.CropImageView.ScaleType.CENTER_CROP;
+import static com.theartofdev.edmodo.cropper.CropImageView.ScaleType.CENTER_INSIDE;
 
 public abstract class ChooseAvatarAbstract extends AppCompatActivity {
 
@@ -187,6 +188,7 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
             switch (requestCode) {
                 case SELECT_GALLERY_IMAGE_CODE:
                     startCropActivity(data.getData());
+//                    onImageProvided(retrieveDrawableFromUri(data.getData()), data.getData().getPath());
                     break;
                 case REQUEST_CODE_CAMERA_CAPTURE:
                     Uri resultUri = Uri.parse(cameraFilePath);
@@ -217,8 +219,9 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
         CropImage.activity(sourceUri)
                 //.setCropShape(CropImageView.CropShape.RECTANGLE)
                 .setFixAspectRatio(false)
-                .setScaleType(CENTER_CROP)
+                .setScaleType(CENTER_INSIDE)
                 //.setRequestedSize(640, 480)
+                .setAutoZoomEnabled(false)
                 .setGuidelines(CropImageView.Guidelines.ON)
                 .start(this);
     }
