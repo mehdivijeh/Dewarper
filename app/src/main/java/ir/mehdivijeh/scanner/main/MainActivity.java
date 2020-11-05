@@ -76,10 +76,9 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test.jpg");
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test1.jpg");
         if (file.exists()) {
-            Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test.jpg", this);
+            Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test1.jpg", this);
             dewarper.dewarping();
         }
 
