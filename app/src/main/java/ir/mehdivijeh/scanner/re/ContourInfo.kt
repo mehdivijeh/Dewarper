@@ -105,7 +105,7 @@ class ContourInfo(val contour: MatOfPoint, val rect: Rect, val tightMask: Mat) {
     }
 
     private fun intervalMeasureOverlap(a: Mat, b: Mat): Double {
-        return min(a[0, 1][0], a[0, 1][0]) - max(a[0, 0][0], b[0, 0][0])
+        return min(a[0, 1][0], b[0, 1][0]) - max(a[0, 0][0], b[0, 0][0])
     }
 
 }
