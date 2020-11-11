@@ -10,6 +10,7 @@ import org.opencv.core.*
 import org.opencv.core.Core.*
 import org.opencv.core.CvType.*
 import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 import org.opencv.imgproc.Imgproc.*
 import java.io.File
 import kotlin.math.*
@@ -86,10 +87,10 @@ class Dewarper(val imagePath: String, val context: Context) {
         val xMax = img.size().width - PAGE_MARGIN_X
         val yMax = img.size().height - PAGE_MARGIN_Y
 
-        val page = Mat(img.rows(), img.cols(), img.type())
+        val page = Mat.zeros(img.rows(), img.cols(), img.type())
         rectangle(page, Point(xMin, yMin), Point(xMax, yMax), Scalar(255.0, 255.0, 255.0), -1)
 
-        val outline = Mat(4, 2, CV_32F)
+        val outline = Mat(4, 2, CV_64F)
         outline.put(0, 0, xMin)
         outline.put(0, 1, yMin)
 
@@ -119,8 +120,6 @@ class Dewarper(val imagePath: String, val context: Context) {
             val width = rect.width
             val height = rect.height
 
-            Logger.log(TAG, "$xMin   $yMin   $width   $height", LoggerType.Debug)
-
             if (width < TEXT_MIN_WIDTH ||
                     height < TEXT_MIN_HEIGHT ||
                     width < (TEXT_MIN_ASPECT * height)) {
@@ -129,9 +128,16 @@ class Dewarper(val imagePath: String, val context: Context) {
 
             val tightMask = makeTightMask(contour, xMin, yMin, width, height)
 
-            Logger.log(TAG, (sumElems(tightMask).`val`.maxOrNull()
-                    ?: 0.0).toString(), LoggerType.Debug)
-            if (sumElems(tightMask).`val`.maxOrNull() ?: 0.0 > TEXT_MAX_THICKNESS) {
+            var max = 0.0
+            for (i in 0 until tightMask.cols()) {
+                var sum = 0.0
+                for (j in 0 until tightMask.rows()) {
+                    sum += tightMask[j, i][0]
+                }
+                if (max < sum) max = sum
+            }
+
+            if (max > TEXT_MAX_THICKNESS) {
                 continue
             }
 
@@ -144,14 +150,15 @@ class Dewarper(val imagePath: String, val context: Context) {
     }
 
     private fun makeTightMask(contour: MatOfPoint, xMin: Int, yMin: Int, width: Int, height: Int): Mat {
-        val tightMask = Mat(height, width, CV_8U, Scalar.all(0.0))
+        val tightMask = Mat.zeros(height, width, CV_64F)
         val tightContour = Mat()
         contour.copyTo(tightContour)
 
         for (i in 0 until tightContour.rows()) {
             for (j in 0 until tightContour.cols()) {
-                tightContour[i, j][0] - xMin
-                tightContour[i, j][1] - yMin
+                tightContour.put(i, j, (contour[i, j][0] - xMin), (contour[i, j][1] - yMin))
+                Logger.log("zMin", tightContour[i, j][0].toString(), LoggerType.Debug)
+                Logger.log("zMin", tightContour[i, j][1].toString(), LoggerType.Debug)
             }
         }
 
@@ -184,16 +191,25 @@ class Dewarper(val imagePath: String, val context: Context) {
             adaptiveThreshold(sGray, mask, 255.0, ADAPTIVE_THRESH_MEAN_C,
                     THRESH_BINARY_INV, ADAPTIVE_WIN_SZ, 7.0)
 
+            debugShow("thresholded", mask)
+
             erode(mask, mask,
-                    getStructuringElement(THRESH_BINARY_INV, Size(3.0, 1.0)), null, 3)
+                    getStructuringElement(THRESH_BINARY_INV, Size(3.0, 1.0)), Point(), 3)
+
+            debugShow("eroded", mask)
 
             dilate(mask, mask,
                     getStructuringElement(THRESH_BINARY_INV, Size(8.0, 2.0)))
+
+            debugShow("dilated", mask)
         }
 
-        //TODO : Complete it
-        /*val rMat = Mat()
-        Core.min(mask, pageMask, rMat)*/
+        /*//TODO : Complete it
+        cvtColor(pageMask,pageMask, Imgproc.COLOR_BGR2GRAY);
+        Logger.log("debug_output", mask.toString(), LoggerType.Debug)
+        Logger.log("debug_output", pageMask.toString(), LoggerType.Debug)
+        val rMat = Mat()
+        min(mask, pageMask, rMat)*/
 
         return mask
     }
@@ -328,15 +344,26 @@ class Dewarper(val imagePath: String, val context: Context) {
         spans.forEach { span ->
             val contourPointsList = mutableListOf<Pair<Int, Double>>()
             span.forEach { cInfo ->
-                val yVals = Mat(1, cInfo.tightMask.rows(), CV_64FC1)
-                for (i in 0 until cInfo.tightMask.rows())
-                    yVals.put(0, i, cInfo.tightMask[i, 0][0])
+
+                for (i in 0 until cInfo.tightMask.rows()) {
+                    var sum = 0.0
+                    for (j in 0 until cInfo.tightMask.cols()) {
+                        sum += cInfo.tightMask[i, j][0]
+                    }
+                    if(sum == 0.0)
+                        Logger.log("sumss", sum.toString(), LoggerType.Debug)
+                }
+
+                val yVals = Mat(cInfo.tightMask.rows(), 1, CV_64FC1)
+                for (i in 0 until cInfo.tightMask.rows()) {
+                    yVals.put(i, 0, i.toDouble())
+                }
 
                 val totals = Mat()
                 cInfo.tightMask.copyTo(totals)
                 for (i in 0 until cInfo.tightMask.rows()) {
                     for (j in 0 until cInfo.tightMask.cols()) {
-                        totals.put(i, j, (cInfo.tightMask[i, j][0] * yVals[0, i][0]))
+                        totals.put(i, j, (cInfo.tightMask[i, j][0] * yVals[i, 0][0]))
                     }
                 }
 
@@ -348,13 +375,14 @@ class Dewarper(val imagePath: String, val context: Context) {
                     }
                     totalsValue.put(0, i, sum)
                 }
+
                 val means = Mat(1, cInfo.tightMask.cols(), CV_64FC1)
                 for (i in 0 until cInfo.tightMask.cols()) {
                     var sum = 0.0
                     for (j in 0 until cInfo.tightMask.rows()) {
                         sum += cInfo.tightMask[j, i][0]
                     }
-                    means.put(0, i, (sum / totalsValue[0, i][0]))
+                    means.put(0, i, (totalsValue[0, i][0] / sum))
                 }
 
                 val xMin = cInfo.rect.x
@@ -387,9 +415,39 @@ class Dewarper(val imagePath: String, val context: Context) {
         height *= 0.5
         width *= 0.5
         for (i in 0 until contourPoints.rows()) {
-            contourPoints.put(i, 0, ((contourPoints[i, 0][0] - width) * scl))
-            contourPoints.put(i, 1, ((contourPoints[i, 1][0] - height) * scl))
+            contourPoints.put(i, 0, ((contourPoints[i, 0][0] - height) * scl))
+            contourPoints.put(i, 1, ((contourPoints[i, 1][0] - width) * scl))
         }
+    }
+
+    private fun normToPix(srcImage: Mat, contourPoints: Mat, asInteger: Boolean): Mat {
+        var height = srcImage.height().toDouble()
+        var width = srcImage.width().toDouble()
+        val scl = max(height, width) * 0.5
+
+        val offset = Mat(1, 2, contourPoints.type())
+        offset.put(0, 0, (height * 0.5))
+        offset.put(0, 1, (width * 0.5))
+
+        val contourPointsMul = Mat()
+        multiply(contourPoints, Scalar(scl), contourPointsMul)
+
+        val rval = Mat(contourPointsMul.rows(), 2, CV_64F)
+        for (i in 0 until contourPointsMul.rows()) {
+            rval.put(i, 0, (contourPointsMul[i, 0][0] + offset[0, 0][0]))
+            rval.put(i, 1, (contourPointsMul[i, 1][0] + offset[0, 1][0]))
+        }
+
+        if (asInteger) {
+            add(rval, Scalar(0.5), rval)
+            for (i in 0 until contourPointsMul.rows()) {
+                //TODO : BAD CODING :))
+                rval.put(i, 0, (rval[i, 0][0].toInt()).toDouble())
+                rval.put(i, 1, (rval[i, 1][0].toInt()).toDouble())
+            }
+        }
+
+        return rval
     }
 
     private fun keyPointsFromSamples(srcImage: Mat, pageMask: Mat, outline: Mat, spanPoints: MutableList<Mat>) {
@@ -398,6 +456,7 @@ class Dewarper(val imagePath: String, val context: Context) {
 
         spanPoints.forEach { points ->
             val evec = Mat()
+
             PCACompute(points, Mat(), evec, 1)
 
             val point = Mat(1, 2, points.channels())
@@ -408,30 +467,123 @@ class Dewarper(val imagePath: String, val context: Context) {
             val weightScalar = Scalar(norm(point))
 
             multiply(evec, weightScalar, evec)
+
             allEvecs.put(0, 0, (allEvecs[0, 0][0] + evec[0, 0][0]))
-            allEvecs.put(0, 0, (allEvecs[0, 1][0] + evec[0, 1][0]))
+            allEvecs.put(0, 1, (allEvecs[0, 1][0] + evec[0, 1][0]))
             allWeights += weight
         }
         val evec = Mat()
         divide(allEvecs, Scalar(allWeights), evec)
-        val xDir = evec.reshape(1)
+
+        //val xDir = evec.reshape(0 ,1)
+        val xDir = Mat()
+        evec.copyTo(xDir)
 
         if (xDir[0, 0][0] < 0) {
             xDir.put(0, 0, -xDir[0, 0][0])
+            xDir.put(0, 1, -xDir[0, 1][0])
         }
 
-        val yDir = Mat(1, 1, CV_8S)
+        val yDir = Mat(1, 2, CV_64FC1)
         yDir.put(0, 0, -xDir[0, 1][0])
         yDir.put(0, 1, xDir[0, 0][0])
 
-        val pageCoords = MatOfInt()
-        val points: Mat = Mat.zeros(outline.size(), outline.type())
+        val points = Mat.zeros(outline.size(), outline.type())
         findNonZero(outline, points)
+
+        val pageCoords = MatOfInt()
         convexHull(MatOfPoint(points), pageCoords)
 
-        pixToNorm(pageMask, pageCoords.reshape(1, 1))
-        pageCoords.reshape(1, 4)
-        //TODO : complete from here
+        val pageCoordsSort = Mat(4, 2, outline.type())
+        for (i in 0 until pageCoords.rows()) {
+            pageCoordsSort.put(i, 0, outline[pageCoords[i, 0][0].toInt(), 0][0])
+            pageCoordsSort.put(i, 1, outline[pageCoords[i, 0][0].toInt(), 1][0])
+        }
+
+        pixToNorm(pageMask, pageCoordsSort)
+        //pixToNorm(pageMask, pageCoords.reshape(1, 1))
+        //pageCoords.reshape(1, 4)
+
+        var pxCoords = Mat()
+        var pyCoords = Mat()
+
+        val xDirShape = Mat(2, 1, xDir.type())
+        xDirShape.put(0, 0, xDir[0, 0][0])
+        xDirShape.put(1, 0, xDir[0, 1][0])
+
+        val yDirShape = Mat(2, 1, yDir.type())
+        yDirShape.put(0, 0, yDir[0, 0][0])
+        yDirShape.put(1, 0, yDir[0, 1][0])
+
+        gemm(pageCoordsSort, xDirShape, 1.0, Mat(), 0.0, pxCoords, 0);
+        gemm(pageCoordsSort, yDirShape, 1.0, Mat(), 0.0, pyCoords, 0);
+
+        /*for (i in 0 until pxCoords.rows()) {
+            for (j in 0 until pxCoords.cols()) {
+                //Logger.log("helloLog", evec[i, j][0].toString(), LoggerType.Debug)
+                Logger.log("helloLog", pxCoords[i, j][0].toString(), LoggerType.Debug)
+                Logger.log("helloLog", pyCoords[i, j][0].toString(), LoggerType.Debug)
+            }
+        }*/
+
+        val px0 = minMaxLoc(pxCoords).minVal
+        val px1 = minMaxLoc(pxCoords).maxVal
+
+        val py0 = minMaxLoc(pyCoords).minVal
+        val py1 = minMaxLoc(pyCoords).maxVal
+
+        val pX00Mul = Mat()
+        val pX10Mul = Mat()
+        val pY00Mul = Mat()
+        val pY10Mul = Mat()
+
+        multiply(xDir, Scalar(px0), pX00Mul)
+        multiply(xDir, Scalar(px1), pX10Mul)
+        multiply(yDir, Scalar(py0), pY00Mul)
+        multiply(yDir, Scalar(py1), pY10Mul)
+
+        val p00 = Mat()
+        val p10 = Mat()
+        val p11 = Mat()
+        val p01 = Mat()
+
+        add(pX00Mul, pY00Mul, p00)
+        add(pX10Mul, pY00Mul, p10)
+        add(pX10Mul, pY10Mul, p11)
+        add(pX00Mul, pY10Mul, p01)
+
+        val corners = Mat(4, 2, CV_64FC1)
+        corners.put(0, 0, p00[0, 0][0])
+        corners.put(0, 1, p00[0, 1][0])
+        corners.put(1, 0, p10[0, 0][0])
+        corners.put(1, 1, p10[0, 1][0])
+        corners.put(2, 0, p11[0, 0][0])
+        corners.put(2, 1, p11[0, 1][0])
+        corners.put(3, 0, p01[0, 0][0])
+        corners.put(3, 1, p01[0, 1][0])
+
+        val xcoords = mutableListOf<Double>()
+        val ycoords = mutableListOf<Double>()
+
+        spanPoints.forEach { point ->
+            val pts = doubleArrayOf(point[0, 0][0], point[0, 1][0])
+
+            /*pxCoords = pts.asSequence().zip(xDirArray.asSequence()) { a, b -> a * b }.toList()
+            pyCoords = pts.asSequence().zip(yDirArray.asSequence()) { a, b -> a * b }.toList()
+
+            val pXCoordsChange = mutableListOf<Double>()
+            pxCoords.forEach {
+                pXCoordsChange.add(it - px0)
+            }
+
+            val pYCoordsChange = mutableListOf<Double>()
+            pyCoords.forEach {
+                pYCoordsChange.add(pyCoords.average() - px0)
+            }*/
+
+        }
+
+        visualizeSpanPoints(srcImage, spanPoints, corners)
     }
 
     private fun visualizeContours(small: Mat, cInfoList: List<ContourInfo>) {
@@ -499,5 +651,53 @@ class Dewarper(val imagePath: String, val context: Context) {
         }
 
         debugShow("spans", display)
+    }
+
+    private fun visualizeSpanPoints(srcImage: Mat, spanPoints: MutableList<Mat>, corners: Mat) {
+        val display = Mat()
+        srcImage.copyTo(display)
+
+        spanPoints.forEachIndexed { index, points ->
+
+            val pointsNorm = normToPix(srcImage, points, false)
+
+            val mean = Mat()
+            val smallEvec = Mat()
+            PCACompute(pointsNorm, mean, smallEvec, 1)
+
+            val dps = Mat()
+            val dpm = Mat()
+            gemm(pointsNorm, smallEvec.reshape(0 , 2), 1.0, Mat(), 0.0, dps, 0)
+            gemm(smallEvec, mean.reshape(0 , 2), 1.0, Mat(), 0.0, dpm, 0)
+
+            val point0 = Mat()
+            val point1 = Mat()
+
+            multiply(smallEvec , Scalar(minMaxLoc(dps).minVal - dpm[0,0][0]) , point0)
+            multiply(smallEvec , Scalar(minMaxLoc(dps).maxVal - dpm[0,0][0]) , point1)
+
+            add(mean ,point0 , point0)
+            add(mean ,point1 , point1)
+
+            for (i in 0 until pointsNorm.rows()) {
+                val point = Mat(1, 2, pointsNorm.type())
+                point.put(0, 0, pointsNorm[i, 0][0])
+                point.put(0, 1, pointsNorm[i, 1][0])
+
+                circle(display, fltp(point), 3, COLORS[index % COLORS.size], -1, LINE_AA)
+            }
+
+            line(display, fltp(point0), fltp(point1), Scalar(255.0, 255.0, 255.0), 1, LINE_AA)
+        }
+
+        val norm = normToPix(srcImage, corners, true)
+        val normVal = Mat(norm.rows(), 1, CV_32SC2)
+        for (i in 0 until norm.rows()) {
+            normVal.put(i, 0, norm[i, 0][0], norm[i, 1][0])
+        }
+
+        polylines(display, mutableListOf(MatOfPoint(normVal)), true, Scalar(255.0, 255.0, 255.0))
+
+        debugShow("span points", display)
     }
 }
