@@ -16,10 +16,13 @@ const val EDGE_MAX_LENGTH = 100.0 //  max reduced px length of edge connecting c
 const val EDGE_ANGLE_COST = 10.0  // cost of angles in edges (trade off vs. length)
 const val EDGE_MAX_ANGLE = 7.5    // maximum change in angle allowed between contours
 
-val SPAN_MIN_WIDTH = 30  // minimum reduced px width for span
-val SPAN_PX_PER_STEP = 20  // reduced px spacing for sampling along spans
-val FOCAL_LENGTH = 4.8  // normalized focal length of camera
+const val SPAN_MIN_WIDTH = 30  // minimum reduced px width for span
+const val SPAN_PX_PER_STEP = 20  // reduced px spacing for sampling along spans
+const val FOCAL_LENGTH = 4.8  // normalized focal length of camera
 
+val RVEC_IDX = Pair(0, 3)  // index of rvec in params vector
+val TVEC_IDX = Pair(3, 6)  // index of tvec in params vector
+val CUBIC_IDX = Pair(6, 7)  // index of cubic slopes in params vector
 
 //nice color palette for visualizing contours, etc.
 val COLORS = arrayListOf(
