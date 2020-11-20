@@ -22,6 +22,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
+import org.apache.commons.math3.analysis.MultivariateFunction;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
