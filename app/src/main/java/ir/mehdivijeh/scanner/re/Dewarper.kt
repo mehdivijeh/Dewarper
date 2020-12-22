@@ -5,7 +5,8 @@ import android.os.Environment
 import android.util.Log
 import ir.mehdivijeh.scanner.util.Logger
 import ir.mehdivijeh.scanner.util.LoggerType
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.apache.commons.math3.analysis.MultivariateFunction
 import org.apache.commons.math3.optim.InitialGuess
 import org.apache.commons.math3.optim.MaxEval
@@ -46,8 +47,10 @@ class Dewarper(val imagePath: String, val context: Context) {
         k.put(2, 2, (1.0))
     }
 
-    fun dewarping() {
+    suspend fun dewarping() {
         var srcImage = loadImage()
+        val orgImage = Mat()
+        srcImage.copyTo(orgImage)
 
         Log.d(TAG, "ori = ${srcImage.size()}")
         srcImage = resizeToScreen(srcImage)
@@ -100,12 +103,11 @@ class Dewarper(val imagePath: String, val context: Context) {
         val dstPoints = Mat()
         vconcat(spanPoints, dstPoints)
 
-        GlobalScope.launch {
-            val optimizeParams = optimizeParams(srcImage, dstPoints, spanCounts, params)
-        }
+        val optimizeParams = optimizeParams(srcImage, dstPoints, spanCounts, params)
 
-        //getPageDims(corners, roughDims, optimizeParams)
+        val pageDims = getPageDims(corners, roughDims, optimizeParams)
 
+        remapImage(orgImage, srcImage, pageDims, optimizeParams)
     }
 
 
@@ -470,7 +472,7 @@ class Dewarper(val imagePath: String, val context: Context) {
         val width = srcImage.width().toDouble()
         val scl = max(height, width) * 0.5
 
-        val offset = Mat(1, 2, contourPoints.type())
+        val offset = Mat(1, 2, CV_64F)
         offset.put(0, 0, (height * 0.5))
         offset.put(0, 1, (width * 0.5))
 
@@ -478,9 +480,16 @@ class Dewarper(val imagePath: String, val context: Context) {
         multiply(contourPoints, Scalar(scl), contourPointsMul)
 
         val rval = Mat(contourPointsMul.rows(), 2, CV_64F)
-        for (i in 0 until contourPointsMul.rows()) {
-            rval.put(i, 0, (contourPointsMul[i, 0][0] + offset[0, 0][0]))
-            rval.put(i, 1, (contourPointsMul[i, 1][0] + offset[0, 1][0]))
+        if (contourPoints.type() == CV_32FC2) {
+            for (i in 0 until contourPointsMul.rows()) {
+                rval.put(i, 0, (contourPointsMul[i, 0][0] + offset[0, 0][0]))
+                rval.put(i, 1, (contourPointsMul[i, 0][1] + offset[0, 1][0]))
+            }
+        } else {
+            for (i in 0 until contourPointsMul.rows()) {
+                rval.put(i, 0, (contourPointsMul[i, 0][0] + offset[0, 0][0]))
+                rval.put(i, 1, (contourPointsMul[i, 1][0] + offset[0, 1][0]))
+            }
         }
 
         if (asInteger) {
@@ -690,10 +699,17 @@ class Dewarper(val imagePath: String, val context: Context) {
         return Triple(roughDims, spanCounts, params)
     }
 
-    private suspend fun optimizeParams(srcImage: Mat, dstPoints: Mat, spanCounts: MutableList<Int>, params: Mat) {
+    private suspend fun optimizeParams(srcImage: Mat, dstPoints: Mat, spanCounts: MutableList<Int>, params: Mat): Mat {
         val keyPointIndex = makeKeyPointIndex(spanCounts)
 
-        val rel = objective(params, keyPointIndex!!, dstPoints)
+        val keyPointIndexXArray = arrayListOf<Int>()
+        val keyPointIndexYArray = arrayListOf<Int>()
+        for (i in 0 until keyPointIndex!!.rows()) {
+            keyPointIndexXArray.add(keyPointIndex[i, 0][0].toInt())
+            keyPointIndexYArray.add(keyPointIndex[i, 1][0].toInt())
+        }
+
+        val rel = objective(params, keyPointIndex, dstPoints)
         Logger.log("debug_output", "initial objective is: " + rel.toString(), LoggerType.Debug)
 
         val project = projectKeyPoints(params, keyPointIndex)
@@ -706,30 +722,20 @@ class Dewarper(val imagePath: String, val context: Context) {
         }
 
         //optimize and minimize with powell
-        var allMyCodeTake = 0.0
         val multivariateFunction = MultivariateFunction {
-            val startFirstLoop = System.nanoTime()
+            val ppts = fasterProjectKeyPoint(it, keyPointIndexXArray, keyPointIndexYArray)
 
-            val toOptimizeParams = Mat(1, it.size, CV_64FC1)
-            for (i in it.indices) {
-                toOptimizeParams.put(0, i, it[i])
-            }
-
-            val ppts = projectKeyPoints(toOptimizeParams, keyPointIndex)
-
-            val returnMat = Mat(dstPoints.rows(), dstPoints.cols(), dstPoints.type())
+            var sumElementX = 0.0
+            var sumElementY = 0.0
             for (i in 0 until ppts.rows()) {
-                returnMat.put(i, 0, (dstPoints[i, 0][0] - ppts[i, 0][0]).pow(2))
-                returnMat.put(i, 1, (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2))
+                sumElementX += (dstPoints[i, 0][0] - ppts[i, 0][0]).pow(2)
+                sumElementY += (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
             }
 
-            val endSecondLoop = System.nanoTime()
-            allMyCodeTake += endSecondLoop - startFirstLoop
-
-            sumElems(returnMat).`val`[0]
+            sumElementX + sumElementY
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        return withContext(Dispatchers.Unconfined) {
             val startOptimizeTime = System.nanoTime()
             val powellOptimizer = PowellOptimizer(1E-14, 1E-40)
             val value = powellOptimizer.optimize(
@@ -739,7 +745,6 @@ class Dewarper(val imagePath: String, val context: Context) {
                     InitialGuess(paramsArray.toDoubleArray()))
             val endOptimizeTime = System.nanoTime()
 
-            Logger.log("debug_output", "my code take ${allMyCodeTake / 1_000_000_000} second", LoggerType.Debug)
             Logger.log("debug_output", "all code take ${(endOptimizeTime - startOptimizeTime) / 1_000_000_000} second", LoggerType.Debug)
 
             val optimizeParams = Mat(1, value.point.size, CV_64FC1)
@@ -750,9 +755,9 @@ class Dewarper(val imagePath: String, val context: Context) {
             val projectAfter = projectKeyPoints(optimizeParams, keyPointIndex)
             val displayAfter = drawCorrespondences(srcImage, dstPoints, projectAfter)
             debugShow("keypoints after", displayAfter)
+            optimizeParams
         }
 
-        //return optimizeParams
     }
 
     private fun objective(params: Mat, keyPointIndex: Mat, dstPoints: Mat): Scalar? {
@@ -764,6 +769,22 @@ class Dewarper(val imagePath: String, val context: Context) {
             returnMat.put(i, 1, (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2))
         }
         return sumElems(returnMat)
+    }
+
+    private fun fasterProjectKeyPoint(pvec: DoubleArray,
+                                      keyPointIndexXArray: ArrayList<Int>,
+                                      keyPointIndexYArray: ArrayList<Int>
+    ): MatOfPoint2f {
+        val xCoords = arrayListOf<Double>()
+        val yCoords = arrayListOf<Double>()
+        for (i in 0 until keyPointIndexXArray.size) {
+            xCoords.add(pvec[keyPointIndexXArray[i]])
+            yCoords.add(pvec[keyPointIndexYArray[i]])
+        }
+        xCoords[0] = 0.0
+        yCoords[0] = 0.0
+
+        return fastProjectXy(pvec, xCoords, yCoords)
     }
 
     private fun projectKeyPoints(pvec: Mat, keyPointIndex: Mat): MatOfPoint2f {
@@ -781,7 +802,45 @@ class Dewarper(val imagePath: String, val context: Context) {
         return projectXy(xyCoords, pvec)
     }
 
+    private fun fastProjectXy(pvec: DoubleArray, xCoords: ArrayList<Double>, yCoords: ArrayList<Double>): MatOfPoint2f {
+        val alpha = pvec[CUBIC_IDX.first]
+        val beta = pvec[CUBIC_IDX.second]
+
+        val polyIntArray = doubleArrayOf(alpha + beta, -2 * alpha - beta, alpha, 0.0)
+
+        //O(n**2)
+        val startOptimizeTime = System.nanoTime()
+        val objPointsList: MutableList<Point3> = ArrayList()
+        for (i in xCoords.indices) {
+            objPointsList.add(Point3(xCoords[i], yCoords[i], horner(polyIntArray, xCoords[i])))
+        }
+
+        val endOptimizeTime = System.nanoTime()
+
+//        Logger.log("debug_output", "z calculate ${(endOptimizeTime - startOptimizeTime) / 1_000} millisecond", LoggerType.Debug)
+
+        val objPoints = MatOfPoint3f()
+        objPoints.fromList(objPointsList)
+
+        val rvec = Mat(3, 1, CV_64FC1)
+        rvec.put(0, 0, pvec[0])
+        rvec.put(1, 0, pvec[1])
+        rvec.put(2, 0, pvec[2])
+
+        val tvec = Mat(3, 1, CV_64FC1)
+        tvec.put(0, 0, pvec[3])
+        tvec.put(1, 0, pvec[4])
+        tvec.put(2, 0, pvec[5])
+
+        val imagePoint = MatOfPoint2f()
+        projectPoints(objPoints, rvec, tvec, k, MatOfDouble(0.0, 0.0, 0.0, 0.0, 0.0), imagePoint, Mat())
+
+        return imagePoint
+    }
+
+
     private fun projectXy(xyCoords: Mat, pvec: Mat): MatOfPoint2f {
+
         val alpha = pvec[0, CUBIC_IDX.first][0]
         val beta = pvec[0, CUBIC_IDX.second][0]
 
@@ -818,7 +877,53 @@ class Dewarper(val imagePath: String, val context: Context) {
         return imagePoint
     }
 
-    fun horner(poly: DoubleArray, x: Double): Double {
+
+    private fun projectXyA(xyCoords: Mat, pvec: Mat): MatOfPoint2f {
+
+        val alpha = pvec[0, CUBIC_IDX.first][0]
+        val beta = pvec[0, CUBIC_IDX.second][0]
+
+        val polyIntArray = doubleArrayOf(alpha + beta, -2 * alpha - beta, alpha, 0.0)
+
+        val zCoords = Mat(xyCoords.rows(), 1, xyCoords.type())
+        for (i in 0 until xyCoords.rows()) {
+            zCoords.put(i, 0, horner(polyIntArray, xyCoords[i, 0][0]))
+        }
+
+        val objPointsList: MutableList<Point3> = ArrayList()
+        for (i in 0 until xyCoords.rows()) {
+            objPointsList.add(Point3(xyCoords[i, 0][0], xyCoords[i, 1][0], zCoords[i, 0][0]))
+        }
+
+        val objPoints = MatOfPoint3f()
+        objPoints.fromList(objPointsList)
+
+        val rvec = Mat(3, 1, pvec.type())
+        rvec.put(0, 0, pvec[0, 0][0])
+        rvec.put(1, 0, pvec[0, 1][0])
+        rvec.put(2, 0, pvec[0, 2][0])
+
+
+        val tvec = Mat(3, 1, pvec.type())
+        tvec.put(0, 0, pvec[0, 3][0])
+        tvec.put(1, 0, pvec[0, 4][0])
+        tvec.put(2, 0, pvec[0, 5][0])
+
+        /*for (i in 0 until objPointsList.size) {
+            Log.d(TAG, "remapImage: ${objPointsList[i].x} ${objPointsList[i].y} ${objPointsList[i].z}")
+        }*/
+
+        val imagePoint = MatOfPoint2f()
+        projectPoints(objPoints, rvec, tvec, k, MatOfDouble(0.0, 0.0, 0.0, 0.0, 0.0), imagePoint, Mat())
+
+        /*for (i in 0 until objPointsList.size) {
+                Log.d(TAG, "remapImage: ${objPointsList[i].x} ${objPointsList[i].y} ${objPointsList[i].z}")
+            }*/
+
+        return imagePoint
+    }
+
+    private fun horner(poly: DoubleArray, x: Double): Double {
         var result = poly[0]
         for (i in 1 until poly.size) result = result * x + poly[i]
         return result
@@ -848,8 +953,153 @@ class Dewarper(val imagePath: String, val context: Context) {
         return keyPointIndex
     }
 
-    private fun getPageDims(corners: Mat, roughDims: Mat, optimizeParams: Mat) {
+    private fun getPageDims(corners: Mat, roughDims: Mat, optimizeParams: Mat): Mat {
+        val dstBr = Mat(1, 2, CV_16FC1)
+        dstBr.put(0, 0, corners[2, 0][0])
+        dstBr.put(0, 1, corners[2, 1][0])
 
+        val keyPointIndexXArray = arrayListOf<Double>()
+        val keyPointIndexYArray = arrayListOf<Double>()
+        for (i in 0 until optimizeParams.rows()) {
+            keyPointIndexXArray.add(optimizeParams[i, 0][0])
+            keyPointIndexYArray.add(optimizeParams[i, 1][0])
+        }
+
+        Log.d(TAG, "getPageDims: " + roughDims.toString())
+
+        val multivariateFunction = MultivariateFunction {
+            val xyCoords = Mat(1, 2, CV_16FC1)
+            xyCoords.put(0, 0, it[0])
+            xyCoords.put(0, 1, it[1])
+
+            val ppts = projectXy(xyCoords, optimizeParams)
+
+            var sumElementX = 0.0
+            var sumElementY = 0.0
+            for (i in 0 until ppts.rows()) {
+                sumElementX += (dstBr[i, 0][0] - ppts[i, 0][0]).pow(2)
+                sumElementY += (dstBr[i, 1][0] - ppts[i, 0][1]).pow(2)
+            }
+
+            sumElementX + sumElementY
+        }
+
+        Log.d(TAG, "getPageDims: " + roughDims.toString())
+        val paramsArray = mutableListOf<Double>()
+        for (i in 0 until roughDims.cols()) {
+            paramsArray.add(roughDims[0, i][0])
+        }
+
+        val powellOptimizer = PowellOptimizer(1E-14, 1E-40)
+        val value = powellOptimizer.optimize(
+                MaxEval(Int.MAX_VALUE),
+                ObjectiveFunction(multivariateFunction),
+                GoalType.MINIMIZE,
+                InitialGuess(paramsArray.toDoubleArray()))
+
+        val dims = Mat(1, value.point.size, CV_64FC1)
+        for (i in value.point.indices) {
+            dims.put(0, i, value.point[i])
+        }
+
+        return dims
+    }
+
+    private fun remapImage(orgImage: Mat, srcImage: Mat, pageDims: Mat, optimizeParams: Mat) {
+        val height = roundNearestMultiple((0.5 * pageDims[0, 1][0] * OUTPUT_ZOOM * orgImage.height()).toInt(), REMAP_DECIMATE)
+        val width = roundNearestMultiple((height * pageDims[0, 0][0] / pageDims[0, 1][0]).toInt(), REMAP_DECIMATE)
+
+        val heightSmall = height / REMAP_DECIMATE
+        val widthSmall = width / REMAP_DECIMATE
+
+        val pageXRange = mutableListOf<Double>()
+        var range = 0.0
+        for (i in 0 until widthSmall + 1) {
+            pageXRange.add(range)
+            range += pageDims[0, 0][0] / widthSmall
+        }
+
+        val pageYRange = mutableListOf<Double>()
+        range = 0.0
+        for (i in 0 until heightSmall + 1) {
+            pageYRange.add(range)
+            range += pageDims[0, 1][0] / heightSmall
+        }
+
+        val pageXCoords = Mat(pageYRange.size, pageXRange.size, CV_32FC1)
+        for (i in 0 until pageXCoords.rows()) {
+            for (j in 0 until pageXCoords.cols()) {
+                pageXCoords.put(i, j, pageXRange[j])
+            }
+        }
+
+        val pageYCoords = Mat(pageYRange.size, pageXRange.size, CV_32FC1)
+        for (i in 0 until pageYCoords.rows()) {
+            for (j in 0 until pageYCoords.cols()) {
+                pageYCoords.put(i, j, pageYRange[i])
+            }
+        }
+
+        val xyCoords = Mat()
+        hconcat(mutableListOf(pageXCoords.reshape(0, pageXCoords.rows() * pageXCoords.cols()),
+                pageYCoords.reshape(0, pageYCoords.rows() * pageYCoords.cols())), xyCoords)
+
+        Log.d(TAG, "remapImage: x reshape " + pageXCoords.reshape(0, pageXCoords.rows() * pageXCoords.cols()).toString())
+
+        val imagePoints = projectXyA(xyCoords, optimizeParams)
+
+        val imagePointOneChannel = Mat(imagePoints.rows(), 2, CV_32FC1)
+        for (i in 0 until imagePoints.rows()) {
+            imagePointOneChannel.put(i, 0, imagePoints[i, 0][0])
+            imagePointOneChannel.put(i, 1, imagePoints[i, 0][1])
+        }
+
+        val imagePointNorm = normToPix(orgImage, imagePointOneChannel, false)
+
+        for (i in 0 until imagePointNorm.rows()) {
+            Log.d(TAG, "remapImage: ${imagePointNorm[i, 0][0]} , ${imagePointNorm[i, 1][0]}")
+        }
+
+        Log.d(TAG, "remapImage: x reshape " + imagePointNorm.toString())
+
+        val imageXCoords = Mat(imagePointNorm.rows(), 1, CV_32FC1)
+        val imageYCoords = Mat(imagePointNorm.rows(), 1, CV_32FC1)
+        for (i in 0 until imagePointNorm.rows()) {
+            imageXCoords.put(i, 0, imagePointNorm[i, 0][0])
+            imageYCoords.put(i, 0, imagePointNorm[i, 1][0])
+        }
+
+        val imageXCoordsReshape = imageXCoords.reshape(0, pageXCoords.rows())
+        val imageYCoordsReshape = imageYCoords.reshape(0, pageYCoords.rows())
+
+        Log.d(TAG, "remapImage: x reshape " + imageXCoordsReshape.toString())
+
+        val sz = Size(width.toDouble(), height.toDouble())
+        val imageXCoordsResize = Mat()
+        val imageYCoordsResize = Mat()
+        resize(imageXCoordsReshape, imageXCoordsResize, sz)
+        resize(imageYCoordsReshape, imageYCoordsResize, sz)
+
+        val imageGray = Mat()
+        cvtColor(orgImage, imageGray, COLOR_RGB2GRAY)
+
+        val remapped = Mat()
+        remap(imageGray, remapped, imageXCoordsResize, imageYCoordsResize, INTER_CUBIC, BORDER_REPLICATE)
+
+        val thresh = Mat()
+        adaptiveThreshold(remapped, thresh, 255.0, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY, ADAPTIVE_WIN_SZ, 25.0)
+
+        debugShow("output", thresh)
+
+    }
+
+    private fun roundNearestMultiple(i: Int, factor: Int): Int {
+        val rem = i % factor
+        return if (rem == 0) {
+            i
+        } else {
+            i + factor - rem
+        }
     }
 
     private fun visualizeContours(small: Mat, cInfoList: List<ContourInfo>) {

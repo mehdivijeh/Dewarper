@@ -2,6 +2,10 @@ package ir.mehdivijeh.scanner.re
 
 import org.opencv.core.Scalar
 
+const val OUTPUT_ZOOM = 1.0  // how much to zoom output relative to *original* image
+const val OUTPUT_DPI = 300  // just affects stated DPI of PNG, not appearance
+const val REMAP_DECIMATE = 16  // downscaling factor for remapping image
+
 const val PAGE_MARGIN_X = 0.0  // reduced px to ignore near L/R edge
 const val PAGE_MARGIN_Y = 0.0  // reduced px to ignore near T/B edge
 const val ADAPTIVE_WIN_SZ = 55  // window size for adaptive threshold in reduced px
@@ -18,7 +22,7 @@ const val EDGE_MAX_ANGLE = 7.5    // maximum change in angle allowed between con
 
 const val SPAN_MIN_WIDTH = 30  // minimum reduced px width for span
 const val SPAN_PX_PER_STEP = 20  // reduced px spacing for sampling along spans
-const val FOCAL_LENGTH = 4.8  // normalized focal length of camera
+const val FOCAL_LENGTH = 4.75  // normalized focal length of camera
 
 val RVEC_IDX = Pair(0, 3)  // index of rvec in params vector
 val TVEC_IDX = Pair(3, 6)  // index of tvec in params vector

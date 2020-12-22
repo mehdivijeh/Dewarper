@@ -34,6 +34,10 @@ import ir.mehdivijeh.scanner.nwrapper.PythonConvertedDewarper;
 import ir.mehdivijeh.scanner.re.Dewarper;
 import ir.mehdivijeh.scanner.wrapper.ImageWrapper;
 import ir.mehdivijeh.scanner.wrapper.ImageWrapperBuilder;
+import kotlinx.coroutines.BuildersKt;
+import kotlinx.coroutines.CoroutineStart;
+import kotlinx.coroutines.Dispatchers;
+import kotlinx.coroutines.GlobalScope;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
@@ -78,11 +82,19 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test1.jpg");
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg");
         if (file.exists()) {
-            Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test1.jpg", this);
-            dewarper.dewarping();
+            BuildersKt.launch(GlobalScope.INSTANCE,
+                    Dispatchers.getIO(),//context to be ran on
+                    CoroutineStart.DEFAULT,
+                    (coroutineScope, continuation) -> {
+                        Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg", this);
+                        dewarper.dewarping(continuation);
+                        return null;
+                    }
+            );
         }
+
 
         getPermission();
 
