@@ -720,19 +720,28 @@ class Dewarper(val imagePath: String, val context: Context) {
         for (i in 0 until params.cols()) {
             paramsArray.add(params[0, i][0])
         }
-
+        var step = 0
+        var res: Double? = null
         //optimize and minimize with powell
         val multivariateFunction = MultivariateFunction {
-            val ppts = fasterProjectKeyPoint(it, keyPointIndexXArray, keyPointIndexYArray)
-
-            var sumElementX = 0.0
-            var sumElementY = 0.0
+            fastProjectXy(it, keyPointIndexXArray, keyPointIndexYArray, dstPoints)
+//            step++
+//            if (step == 1000) res!! else res = fastProjectXy(it, keyPointIndexXArray, keyPointIndexYArray, dstPoints)
+//            res!!
+            /*val startOptimizeTime = System.nanoTime()
+//            var sumElementX = 0.0
+//            var sumElementY = 0.0
+            var sumElementXY = 0.0
             for (i in 0 until ppts.rows()) {
-                sumElementX += (dstPoints[i, 0][0] - ppts[i, 0][0]).pow(2)
-                sumElementY += (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
+                sumElementXY += (dstPoints[i, 0][0] - ppts[i, 0][0]).pow(2) +
+                        (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
+//                sumElementXY += (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
             }
 
-            sumElementX + sumElementY
+            val endOptimizeTime = System.nanoTime()
+//            Logger.log("debug_output", "this code take ${(endOptimizeTime - startOptimizeTime) / 1_000} second", LoggerType.Debug)
+//            sumElementX + sumElementY
+            sumElementXY*/
         }
 
         return withContext(Dispatchers.Unconfined) {
@@ -771,21 +780,22 @@ class Dewarper(val imagePath: String, val context: Context) {
         return sumElems(returnMat)
     }
 
-    private fun fasterProjectKeyPoint(pvec: DoubleArray,
-                                      keyPointIndexXArray: ArrayList<Int>,
-                                      keyPointIndexYArray: ArrayList<Int>
-    ): MatOfPoint2f {
-        val xCoords = arrayListOf<Double>()
-        val yCoords = arrayListOf<Double>()
-        for (i in 0 until keyPointIndexXArray.size) {
-            xCoords.add(pvec[keyPointIndexXArray[i]])
-            yCoords.add(pvec[keyPointIndexYArray[i]])
-        }
-        xCoords[0] = 0.0
-        yCoords[0] = 0.0
+    /* private fun fasterProjectKeyPoint(pvec: DoubleArray,
+                                       keyPointIndexXArray: ArrayList<Int>,
+                                       keyPointIndexYArray: ArrayList<Int>,
+                                       dstPoints: Mat
+     ): Double {
+         val xCoords = arrayListOf<Double>()
+         val yCoords = arrayListOf<Double>()
+         for (i in 0 until keyPointIndexXArray.size) {
+             xCoords.add(pvec[keyPointIndexXArray[i]])
+             yCoords.add(pvec[keyPointIndexYArray[i]])
+         }
+         xCoords[0] = 0.0
+         yCoords[0] = 0.0
 
-        return fastProjectXy(pvec, xCoords, yCoords)
-    }
+         return fastProjectXy(pvec, xCoords, yCoords , dstPoints)
+     }*/
 
     private fun projectKeyPoints(pvec: Mat, keyPointIndex: Mat): MatOfPoint2f {
         val xyCoords = Mat(keyPointIndex.rows(), keyPointIndex.cols(), pvec.type())
@@ -802,22 +812,21 @@ class Dewarper(val imagePath: String, val context: Context) {
         return projectXy(xyCoords, pvec)
     }
 
-    private fun fastProjectXy(pvec: DoubleArray, xCoords: ArrayList<Double>, yCoords: ArrayList<Double>): MatOfPoint2f {
+    private fun fastProjectXy(pvec: DoubleArray, keyPointIndexXArray: ArrayList<Int>,
+                              keyPointIndexYArray: ArrayList<Int>, dstPoints: Mat): Double {
+
         val alpha = pvec[CUBIC_IDX.first]
         val beta = pvec[CUBIC_IDX.second]
 
         val polyIntArray = doubleArrayOf(alpha + beta, -2 * alpha - beta, alpha, 0.0)
 
-        //O(n**2)
-        val startOptimizeTime = System.nanoTime()
         val objPointsList: MutableList<Point3> = ArrayList()
-        for (i in xCoords.indices) {
-            objPointsList.add(Point3(xCoords[i], yCoords[i], horner(polyIntArray, xCoords[i])))
+
+        objPointsList.add(Point3(0.0, 0.0, 0.0))
+
+        for (i in 1 until keyPointIndexXArray.size) {
+            objPointsList.add(Point3(pvec[keyPointIndexXArray[i]], pvec[keyPointIndexYArray[i]], horner(polyIntArray, pvec[keyPointIndexXArray[i]])))
         }
-
-        val endOptimizeTime = System.nanoTime()
-
-//        Logger.log("debug_output", "z calculate ${(endOptimizeTime - startOptimizeTime) / 1_000} millisecond", LoggerType.Debug)
 
         val objPoints = MatOfPoint3f()
         objPoints.fromList(objPointsList)
@@ -835,7 +844,8 @@ class Dewarper(val imagePath: String, val context: Context) {
         val imagePoint = MatOfPoint2f()
         projectPoints(objPoints, rvec, tvec, k, MatOfDouble(0.0, 0.0, 0.0, 0.0, 0.0), imagePoint, Mat())
 
-        return imagePoint
+        imagePoint.convertTo(imagePoint , CV_64FC1)
+        return norm(dstPoints,imagePoint.reshape(1), NORM_L2)
     }
 
 
@@ -965,8 +975,6 @@ class Dewarper(val imagePath: String, val context: Context) {
             keyPointIndexYArray.add(optimizeParams[i, 1][0])
         }
 
-        Log.d(TAG, "getPageDims: " + roughDims.toString())
-
         val multivariateFunction = MultivariateFunction {
             val xyCoords = Mat(1, 2, CV_16FC1)
             xyCoords.put(0, 0, it[0])
@@ -984,7 +992,6 @@ class Dewarper(val imagePath: String, val context: Context) {
             sumElementX + sumElementY
         }
 
-        Log.d(TAG, "getPageDims: " + roughDims.toString())
         val paramsArray = mutableListOf<Double>()
         for (i in 0 until roughDims.cols()) {
             paramsArray.add(roughDims[0, i][0])
@@ -1044,8 +1051,6 @@ class Dewarper(val imagePath: String, val context: Context) {
         hconcat(mutableListOf(pageXCoords.reshape(0, pageXCoords.rows() * pageXCoords.cols()),
                 pageYCoords.reshape(0, pageYCoords.rows() * pageYCoords.cols())), xyCoords)
 
-        Log.d(TAG, "remapImage: x reshape " + pageXCoords.reshape(0, pageXCoords.rows() * pageXCoords.cols()).toString())
-
         val imagePoints = projectXyA(xyCoords, optimizeParams)
 
         val imagePointOneChannel = Mat(imagePoints.rows(), 2, CV_32FC1)
@@ -1056,12 +1061,6 @@ class Dewarper(val imagePath: String, val context: Context) {
 
         val imagePointNorm = normToPix(orgImage, imagePointOneChannel, false)
 
-        for (i in 0 until imagePointNorm.rows()) {
-            Log.d(TAG, "remapImage: ${imagePointNorm[i, 0][0]} , ${imagePointNorm[i, 1][0]}")
-        }
-
-        Log.d(TAG, "remapImage: x reshape " + imagePointNorm.toString())
-
         val imageXCoords = Mat(imagePointNorm.rows(), 1, CV_32FC1)
         val imageYCoords = Mat(imagePointNorm.rows(), 1, CV_32FC1)
         for (i in 0 until imagePointNorm.rows()) {
@@ -1071,8 +1070,6 @@ class Dewarper(val imagePath: String, val context: Context) {
 
         val imageXCoordsReshape = imageXCoords.reshape(0, pageXCoords.rows())
         val imageYCoordsReshape = imageYCoords.reshape(0, pageYCoords.rows())
-
-        Log.d(TAG, "remapImage: x reshape " + imageXCoordsReshape.toString())
 
         val sz = Size(width.toDouble(), height.toDouble())
         val imageXCoordsResize = Mat()

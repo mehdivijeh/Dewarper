@@ -175,6 +175,16 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
         File file = new File(path);
 
+        BuildersKt.launch(GlobalScope.INSTANCE,
+                Dispatchers.getIO(),//context to be ran on
+                CoroutineStart.DEFAULT,
+                (coroutineScope, continuation) -> {
+                    Dewarper dewarper = new Dewarper(path, this);
+                    dewarper.dewarping(continuation);
+                    return null;
+                }
+        );
+
         //new PythonConvertedDewarper(path);
         //Dewarper dewarper = new Dewarper(path, this);
         //dewarper.dewarping();
