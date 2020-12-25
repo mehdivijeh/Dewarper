@@ -3,9 +3,12 @@ package ir.mehdivijeh.scanner.re
 import android.content.Context
 import android.os.Environment
 import android.util.Log
+import android.widget.Toast
 import ir.mehdivijeh.scanner.util.Logger
 import ir.mehdivijeh.scanner.util.LoggerType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.commons.math3.analysis.MultivariateFunction
 import org.apache.commons.math3.optim.InitialGuess
@@ -27,7 +30,7 @@ import kotlin.math.*
 
 private const val TAG = "Dewarper"
 
-class Dewarper(val imagePath: String, val context: Context) {
+class Dewarper(private val imagePath: String, private val context: Context) {
 
     private val k: Mat
 
@@ -47,7 +50,7 @@ class Dewarper(val imagePath: String, val context: Context) {
         k.put(2, 2, (1.0))
     }
 
-    suspend fun dewarping() {
+    suspend fun dewarping(onComplete : ()-> Unit) {
         var srcImage = loadImage()
         val orgImage = Mat()
         srcImage.copyTo(orgImage)
@@ -108,6 +111,8 @@ class Dewarper(val imagePath: String, val context: Context) {
         val pageDims = getPageDims(corners, roughDims, optimizeParams)
 
         remapImage(orgImage, srcImage, pageDims, optimizeParams)
+
+        onComplete.invoke()
     }
 
 
@@ -720,33 +725,16 @@ class Dewarper(val imagePath: String, val context: Context) {
         for (i in 0 until params.cols()) {
             paramsArray.add(params[0, i][0])
         }
-        var step = 0
-        var res: Double? = null
+
         //optimize and minimize with powell
         val multivariateFunction = MultivariateFunction {
             fastProjectXy(it, keyPointIndexXArray, keyPointIndexYArray, dstPoints)
-//            step++
-//            if (step == 1000) res!! else res = fastProjectXy(it, keyPointIndexXArray, keyPointIndexYArray, dstPoints)
-//            res!!
-            /*val startOptimizeTime = System.nanoTime()
-//            var sumElementX = 0.0
-//            var sumElementY = 0.0
-            var sumElementXY = 0.0
-            for (i in 0 until ppts.rows()) {
-                sumElementXY += (dstPoints[i, 0][0] - ppts[i, 0][0]).pow(2) +
-                        (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
-//                sumElementXY += (dstPoints[i, 1][0] - ppts[i, 0][1]).pow(2)
-            }
-
-            val endOptimizeTime = System.nanoTime()
-//            Logger.log("debug_output", "this code take ${(endOptimizeTime - startOptimizeTime) / 1_000} second", LoggerType.Debug)
-//            sumElementX + sumElementY
-            sumElementXY*/
         }
 
         return withContext(Dispatchers.Unconfined) {
             val startOptimizeTime = System.nanoTime()
             val powellOptimizer = PowellOptimizer(1E-14, 1E-40)
+            //val powellOptimizer = PowellOptimizer(1E-8, 1E-5 , 1E-4 , 1E-4)
             val value = powellOptimizer.optimize(
                     MaxEval(Int.MAX_VALUE),
                     ObjectiveFunction(multivariateFunction),
@@ -824,6 +812,7 @@ class Dewarper(val imagePath: String, val context: Context) {
 
         objPointsList.add(Point3(0.0, 0.0, 0.0))
 
+        //time complexity = O(n**2)
         for (i in 1 until keyPointIndexXArray.size) {
             objPointsList.add(Point3(pvec[keyPointIndexXArray[i]], pvec[keyPointIndexYArray[i]], horner(polyIntArray, pvec[keyPointIndexXArray[i]])))
         }
@@ -933,6 +922,7 @@ class Dewarper(val imagePath: String, val context: Context) {
         return imagePoint
     }
 
+    //time complexity = O(n)
     private fun horner(poly: DoubleArray, x: Double): Double {
         var result = poly[0]
         for (i in 1 until poly.size) result = result * x + poly[i]

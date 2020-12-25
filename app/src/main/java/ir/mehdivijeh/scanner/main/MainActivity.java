@@ -82,14 +82,17 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg");
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test12.jpg");
         if (file.exists()) {
             BuildersKt.launch(GlobalScope.INSTANCE,
-                    Dispatchers.getIO(),//context to be ran on
+                    Dispatchers.getIO(),
                     CoroutineStart.DEFAULT,
                     (coroutineScope, continuation) -> {
-                        Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg", this);
-                        dewarper.dewarping(continuation);
+                        Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test12.jpg", this);
+                        dewarper.dewarping(() -> {
+                            runOnUiThread(() -> Toast.makeText(this, "finished!", Toast.LENGTH_SHORT).show());
+                            return null;
+                        }, continuation);
                         return null;
                     }
             );
@@ -180,7 +183,10 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
                 CoroutineStart.DEFAULT,
                 (coroutineScope, continuation) -> {
                     Dewarper dewarper = new Dewarper(path, this);
-                    dewarper.dewarping(continuation);
+                    dewarper.dewarping(() -> {
+                        runOnUiThread(() -> Toast.makeText(this, "finished!", Toast.LENGTH_SHORT).show());
+                        return null;
+                    }, continuation);
                     return null;
                 }
         );
