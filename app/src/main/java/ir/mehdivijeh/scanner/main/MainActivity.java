@@ -17,10 +17,13 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+
+import com.bumptech.glide.Glide;
 
 import org.apache.commons.math3.analysis.MultivariateFunction;
 
@@ -66,6 +69,8 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
     private ImageView imageView;
     private Button btnSelectImage;
     private ProgressDialog progressDialogLoad;
+    private ImageView imgLoading;
+    private TextView txtLoading;
 
 
     // Constants
@@ -82,13 +87,13 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test12.jpg");
+        /*File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg");
         if (file.exists()) {
             BuildersKt.launch(GlobalScope.INSTANCE,
                     Dispatchers.getIO(),
                     CoroutineStart.DEFAULT,
                     (coroutineScope, continuation) -> {
-                        Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test12.jpg", this);
+                        Dewarper dewarper = new Dewarper(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/test11.jpg", this);
                         dewarper.dewarping(() -> {
                             runOnUiThread(() -> Toast.makeText(this, "finished!", Toast.LENGTH_SHORT).show());
                             return null;
@@ -97,12 +102,14 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
                     }
             );
         }
-
+*/
 
         getPermission();
 
         btnSelectImage = findViewById(R.id.btn_open_image);
         imageView = findViewById(R.id.img);
+        imgLoading = findViewById(R.id.img_loading);
+        txtLoading = findViewById(R.id.txt_loading);
         presenter = new MainPresenter(this);
 
         btnSelectImage.setOnClickListener(v -> showTakeImagePopup(false));
@@ -178,18 +185,36 @@ public class MainActivity extends ChooseAvatarAbstract implements MainContract.M
 
         File file = new File(path);
 
+        txtLoading.setVisibility(View.VISIBLE);
+        imgLoading.setVisibility(View.VISIBLE);
+        btnSelectImage.setVisibility(View.GONE);
+
+        Glide.with(this).load(R.raw.loading).into(imgLoading);
+
+
         BuildersKt.launch(GlobalScope.INSTANCE,
                 Dispatchers.getIO(),//context to be ran on
                 CoroutineStart.DEFAULT,
                 (coroutineScope, continuation) -> {
                     Dewarper dewarper = new Dewarper(path, this);
-                    dewarper.dewarping(() -> {
-                        runOnUiThread(() -> Toast.makeText(this, "finished!", Toast.LENGTH_SHORT).show());
+                    dewarper.dewarping((output) -> {
+                        runOnUiThread(() -> {
+                            Bitmap out = BitmapFactory.decodeFile(output);
+
+                            imageView.setVisibility(View.VISIBLE);
+                            txtLoading.setVisibility(View.GONE);
+                            imgLoading.setVisibility(View.GONE);
+                            imageView.setImageBitmap(out);
+
+                            Toast.makeText(this, "finished!", Toast.LENGTH_SHORT).show();
+                        });
                         return null;
                     }, continuation);
                     return null;
                 }
         );
+
+
 
         //new PythonConvertedDewarper(path);
         //Dewarper dewarper = new Dewarper(path, this);

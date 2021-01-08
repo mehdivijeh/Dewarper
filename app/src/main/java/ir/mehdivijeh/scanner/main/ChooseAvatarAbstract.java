@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Dialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -151,9 +152,11 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
     }
 
     private void openAlbum() {
-        Intent intent = new Intent();
-        intent.setType("image/*");
-        intent.setAction(Intent.ACTION_GET_CONTENT);
+//        Intent intent = new Intent();
+//        intent.setType("image/*");
+//        intent.setAction(Intent.ACTION_GET_CONTENT);
+        Intent intent = new Intent(Intent.ACTION_PICK,
+                MediaStore.Images.Media.INTERNAL_CONTENT_URI);
         startActivityForResult(Intent.createChooser(intent, "Select Picture"), SELECT_GALLERY_IMAGE_CODE);
     }
 
@@ -187,7 +190,10 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
                 case SELECT_GALLERY_IMAGE_CODE:
-                    startCropActivity(data.getData());
+                    Uri selectedImageURI = data.getData();
+                    File imageFile = new File(getRealPathFromURI(selectedImageURI));
+                    onImageProvided(null , imageFile.getAbsolutePath());
+//                    startCropActivity(data.getData());
 //                    onImageProvided(retrieveDrawableFromUri(data.getData()), data.getData().getPath());
                     break;
                 case REQUEST_CODE_CAMERA_CAPTURE:
@@ -213,6 +219,20 @@ public abstract class ChooseAvatarAbstract extends AppCompatActivity {
                     break;
             }
         }
+    }
+
+    private String getRealPathFromURI(Uri contentURI) {
+        String result;
+        Cursor cursor = getContentResolver().query(contentURI, null, null, null, null);
+        if (cursor == null) {
+            result = contentURI.getPath();
+        } else {
+            cursor.moveToFirst();
+            int idx = cursor.getColumnIndex(MediaStore.Images.Media.DATA);
+            result = cursor.getString(idx);
+            cursor.close();
+        }
+        return result;
     }
 
     private void startCropActivity(Uri sourceUri) {

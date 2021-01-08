@@ -50,7 +50,7 @@ class Dewarper(private val imagePath: String, private val context: Context) {
         k.put(2, 2, (1.0))
     }
 
-    suspend fun dewarping(onComplete : ()-> Unit) {
+    suspend fun dewarping(onComplete : (String)-> Unit) {
         var srcImage = loadImage()
         val orgImage = Mat()
         srcImage.copyTo(orgImage)
@@ -110,9 +110,9 @@ class Dewarper(private val imagePath: String, private val context: Context) {
 
         val pageDims = getPageDims(corners, roughDims, optimizeParams)
 
-        remapImage(orgImage, srcImage, pageDims, optimizeParams)
+        val output = remapImage(orgImage, srcImage, pageDims, optimizeParams)
 
-        onComplete.invoke()
+        onComplete.invoke(output)
     }
 
 
@@ -269,7 +269,7 @@ class Dewarper(private val imagePath: String, private val context: Context) {
         return mask
     }
 
-    private fun debugShow(name: String, display: Mat) {
+    private fun debugShow(name: String, display: Mat) : String{
         val storageDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DCIM), "Scanner")
 
         if (!storageDir.exists()) {
@@ -284,6 +284,7 @@ class Dewarper(private val imagePath: String, private val context: Context) {
 
         Imgcodecs.imwrite(outputImage.absolutePath, display)
         Logger.log("debug_output", "$name.jpg saved in ${outputImage.absolutePath}", LoggerType.Debug)
+        return outputImage.absolutePath
     }
 
     private fun fltp(point: Mat): Point {
@@ -1002,7 +1003,7 @@ class Dewarper(private val imagePath: String, private val context: Context) {
         return dims
     }
 
-    private fun remapImage(orgImage: Mat, srcImage: Mat, pageDims: Mat, optimizeParams: Mat) {
+    private fun remapImage(orgImage: Mat, srcImage: Mat, pageDims: Mat, optimizeParams: Mat): String {
         val height = roundNearestMultiple((0.5 * pageDims[0, 1][0] * OUTPUT_ZOOM * orgImage.height()).toInt(), REMAP_DECIMATE)
         val width = roundNearestMultiple((height * pageDims[0, 0][0] / pageDims[0, 1][0]).toInt(), REMAP_DECIMATE)
 
@@ -1076,7 +1077,7 @@ class Dewarper(private val imagePath: String, private val context: Context) {
         val thresh = Mat()
         adaptiveThreshold(remapped, thresh, 255.0, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY, ADAPTIVE_WIN_SZ, 25.0)
 
-        debugShow("output", thresh)
+        return debugShow("output", thresh)
 
     }
 
